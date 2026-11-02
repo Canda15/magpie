@@ -147,6 +147,13 @@ type Route struct {
 	// is unknown (maskingMs)
 	Phase   string `json:"phase,omitempty"`
 	Masking int64  `json:"masking,omitempty"`
+	// 接收监控（live.go）：这条回复到此刻为止收到了多少字节、最近一次**内容**
+	// 是什么时候，以及那些内容值多少输出 tokens（EstTok 是估算，0 表示还没有
+	// 可用的样本）。路由页用它在"正在回答"的行上写进度，所以在飞期间才有；
+	// 结束时保留下来（只是页面不再显示，结束的行有自己更准的一组数）。
+	Bytes     int64 `json:"bytes,omitempty"`
+	ContentAt int64 `json:"contentAt,omitempty"`
+	EstTok    int   `json:"estTok,omitempty"`
 	// Held: the file name, in HeldDir, of the report saved of a request
 	// magpie held too long before routing it and stopped (giveUp)
 	Held string `json:"held,omitempty"`
@@ -592,6 +599,8 @@ type trace struct {
 	// liftSeq is the seq a rest was last lifted by hand at (lifted): a
 	// page waiting hears of it, though no route changed
 	liftSeq int64
+	// liveAt 是上次因"接收进度"叫醒页面的时间（liveBytes），用来限频
+	liveAt time.Time
 }
 
 // lifted tells the pages waiting that a rest was lifted (Unrest).
@@ -827,6 +836,30 @@ func (t *trace) update(r *Route, f func(r *Route)) {
 	if after := activityOf(r); before != after {
 		t.noteActivity(r, activityChange(before, after))
 	}
+}
+
+// liveWake 是「进度」能把页面叫醒的最小间隔。一条流每秒写几十笔字节，
+// 每一笔都叫醒长轮询的话，页面每秒会重画几十次；页面本来也只按百毫秒级
+// 取一次，所以这里攒够 liveWake 再叫。
+const liveWake = 250 * time.Millisecond
+
+// liveBytes 把这条请求收到多少字节、最近内容时间与 tokens 估算写到它的路由上
+// （live.go 的 observe 调）。路由页的「正在回答」行与「谁回答」那一格读这三个数。
+//
+// 数字是总量而不是增量，所以漏掉的前几笔会被下一笔补上；只在攒够 liveWake
+// 时叫醒页面（changed），其余只更新字段——下一次别的更新会一起带出去。
+func (t *trace) liveBytes(rt *Route, bytes, contentAt int64, est int) {
+	if rt == nil {
+		return
+	}
+	t.mu.Lock()
+	rt.Bytes, rt.ContentAt, rt.EstTok = bytes, contentAt, est
+	if now := time.Now(); now.Sub(t.liveAt) >= liveWake {
+		t.liveAt = now
+		t.changed()
+		rt.Seq = t.seq
+	}
+	t.mu.Unlock()
 }
 
 // gatewayTrace tells this gateway's routing to another magpie on the same

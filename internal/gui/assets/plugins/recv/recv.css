@@ -1,0 +1,136 @@
+/* 接收监控页：一行一次请求。样式只用 magpie 自己的变量，浅色深色都跟着走；
+   没有动画（这页每秒刷新两次，任何动效都会变成噪声）。 */
+#view-recv .recv {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 8px;
+}
+
+#view-recv .recv-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 12.5px;
+  color: var(--fg-2);
+  min-height: 20px;
+}
+
+#view-recv .recv-count {
+  font-weight: 600;
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+}
+
+#view-recv .recv-quiet {
+  color: var(--amber);
+  font-variant-numeric: tabular-nums;
+}
+
+#view-recv .recv-grow { flex: 1; }
+
+#view-recv .recv-note {
+  color: var(--amber);
+  font-size: 12px;
+  text-align: right;
+}
+
+#view-recv .recv-empty {
+  border: 1px dashed var(--line);
+  border-radius: 12px;
+  padding: 22px 18px;
+  background: var(--card-2);
+}
+
+#view-recv .recv-empty-title {
+  font-weight: 600;
+  color: var(--fg);
+  margin-bottom: 4px;
+}
+
+#view-recv .recv-empty-sub { color: var(--muted); font-size: 12.5px; }
+
+#view-recv .recv-section-title {
+  font-size: 11px;
+  letter-spacing: .04em;
+  color: var(--muted);
+  margin: 6px 0 6px;
+}
+
+#view-recv .recv-list { display: flex; flex-direction: column; gap: 6px; }
+
+#view-recv .recv-row {
+  display: grid;
+  grid-template-columns: 10px minmax(120px, 1.5fr) minmax(110px, 1fr) 132px 78px 70px 168px;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+}
+
+#view-recv .recv-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+/* 颜色只表示"现在在哪一步"：绿=在收、琥珀=静默、灰=还没开始或已结束、
+   红=失败。静默不是错，所以它不用红色 */
+#view-recv .recv-dot[data-phase="receiving"] { background: var(--green); }
+#view-recv .recv-dot[data-phase="waiting"] { background: var(--faint); }
+#view-recv .recv-dot[data-phase="quiet"] { background: var(--amber); }
+#view-recv .recv-dot[data-phase="failed"] { background: var(--red); }
+#view-recv .recv-dot[data-phase="complete"],
+#view-recv .recv-dot[data-phase="interrupted"] { background: var(--faint); }
+
+#view-recv .recv-model {
+  font-weight: 600;
+  color: var(--fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#view-recv .recv-where {
+  color: var(--muted);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#view-recv .recv-phase { color: var(--fg-2); font-size: 12px; }
+
+#view-recv .recv-bytes,
+#view-recv .recv-tokens {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  color: var(--fg-2);
+}
+
+#view-recv .recv-recent {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+#view-recv .recv-foot {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line-2);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* 窄窗口先让"谁在答"那列让位：模型、状态、字节和最近时间才是这页要看的东西 */
+@media (max-width: 860px) {
+  #view-recv .recv-row { grid-template-columns: 10px minmax(100px, 1.4fr) 120px 72px 64px 120px; }
+  #view-recv .recv-where { display: none; }
+}

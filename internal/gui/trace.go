@@ -288,6 +288,12 @@ func quotaView(id string) string {
 // waits up to 25 s for something to change after the seq it is given, so
 // the page hears of a request as it happens.
 func traceRoutes(mux *http.ServeMux) {
+	// 接收监控：每一行是此刻正在收的一次请求，读的是网关内存里的计数，
+	// 不碰请求正文，也不等上游。页面每半秒左右取一次，所以这里不需要挂起
+	mux.HandleFunc("GET /api/gateway/recv", func(rw http.ResponseWriter, r *http.Request) {
+		now, active, recent := gateway.LiveSnapshot()
+		writeJSON(rw, map[string]any{"now": now, "active": active, "recent": recent})
+	})
 	// Names can arrive or change after a route finishes, independently of the
 	// trace sequence. Read only the IDs the page currently lists.
 	mux.HandleFunc("POST /api/gateway/session-titles", func(rw http.ResponseWriter, r *http.Request) {

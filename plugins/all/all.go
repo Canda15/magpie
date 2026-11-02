@@ -9,6 +9,7 @@ import (
 	_ "github.com/yetone/magpie/plugins/library"
 	_ "github.com/yetone/magpie/plugins/middleware"
 	_ "github.com/yetone/magpie/plugins/otel"
+	_ "github.com/yetone/magpie/plugins/recv"
 	_ "github.com/yetone/magpie/plugins/redact"
 	_ "github.com/yetone/magpie/plugins/rotation"
 	_ "github.com/yetone/magpie/plugins/routing"

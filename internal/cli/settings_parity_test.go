@@ -362,6 +362,7 @@ var notYet = map[string]string{
 	"GET /api/model-speeds":                      U,  // speeds.go
 	"GET /api/gateway/held/{name}":               U,  // trace.go
 	"GET /api/gateway/history":                   U,  // trace.go
+	"GET /api/gateway/recv":                      U,  // trace.go
 	"GET /api/gateway/route":                     U,  // trace.go
 	"GET /api/gateway/trace":                     U,  // trace.go
 	"POST /api/gateway/session-titles":           U,  // trace.go

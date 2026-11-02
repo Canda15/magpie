@@ -2042,6 +2042,23 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request, from provider.Pro
 	var clientResponseID string // only a reply released to the client owns this ID
 	call := Call{Time: start, From: from, Model: unprefixed(modelOf(body)), Agent: who.agent, Via: who.via, Kind: requestCallKind(r.Header, metadata),
 		wire: archiving(r, capture, start, nil), headers: headerLogOf(r.Context())}
+	// 接收监控：这次请求已收到多少字节、走到哪一步。计数点是
+	// captureResponseWriter（每个响应字节都经过它），所以这里只记数字，
+	// 不动一个字节；客户端也不用改地址，因为看的是它已经在用的这条路
+	live := liveBegin(inflightOf(r.Context()), call.Agent, call.Model, from)
+	capture.live = live
+	r = r.WithContext(withLive(r.Context(), live))
+	defer func() {
+		// 为什么这样判：拒答和上游报错都是"失败"，客户端中途走开是"中断"，
+		// 其余算完成。静默不在这里判，它是快照时按最后字节时间算的
+		reason := "complete"
+		if r.Context().Err() != nil {
+			reason = "interrupted"
+		} else if call.Status >= 400 {
+			reason = "failed"
+		}
+		live.finish(reason, call.Usage.Output)
+	}()
 	// the log has the body as it went: masked, or as written where it
 	// went so
 	logBody := func(b []byte) {
@@ -4686,6 +4703,10 @@ func sinceStart(before, d time.Duration) int64 {
 // attempt sends a request to one provider. call.To stays empty when the
 // provider has no endpoint to send it to.
 func (s *Server) attempt(w http.ResponseWriter, r *http.Request, from provider.Protocol, p provider.Provider, model string, body []byte, call *Call) (int, string) {
+	// 接收监控：一次请求可能换了几个成员才有人答，页面上要看真正答话的那一家
+	if live := liveOf(r.Context()); live != nil {
+		live.routed(p.ID, unprefixed(model))
+	}
 	// the tier the reply said, unknown where the vendor's word tells
 	// nothing (servedTierAt)
 	defer func() { call.Usage.Tier = servedTierAt(p.Host(), call.Usage.Tier) }()

@@ -28,6 +28,7 @@
 <link rel="stylesheet" href="plugins.css">
 <link rel="stylesheet" href="plugins/sessions/sessions.css">
 <link rel="stylesheet" href="plugins/redact/redact.css">
+<link rel="stylesheet" href="plugins/recv/recv.css">
 <link rel="stylesheet" href="context.css">
 <link rel="stylesheet" href="omarchy.css">
 </head>
@@ -75,6 +76,7 @@
     <button data-view="gateway" data-feature="gateway"><svg class="nav-ic" viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="14" height="5" rx="1.5"/><rect x="3" y="11" width="14" height="5" rx="1.5"/><path d="M6 6.5h.01M6 13.5h.01"/></g></svg><span data-t>Gateway</span></button>
     <span class="nav-gl" data-t>Insights</span>
     <button data-view="usage" data-feature="usage"><svg class="nav-ic" viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 16V9M8 16V5M12 16v-5M16 16V7"/></g></svg><span data-t>Usage</span></button>
+    <button data-view="recv" data-feature="recv"><svg class="nav-ic" viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3v7.5M7 7.8l3 3.2 3-3.2M4 16h12"/></g></svg><span data-t>Receive monitor</span></button>
     <button data-view="masking" data-feature="redact"><svg class="nav-ic" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M8 1.8 13 3.6v4.1c0 3-2.1 5.4-5 6.5-2.9-1.1-5-3.5-5-6.5V3.6Z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg><span data-t>Masking</span></button>
     <span class="nav-gl" data-t>Extend</span>
     <button data-view="plugins"><svg class="nav-ic" viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3.5h4v2.5a1.5 1.5 0 0 0 3 0V3.5h1.5v13H4v-4h2.5a1.5 1.5 0 0 0 0-3H4v-6z"/></g></svg><span data-t>Plugins</span></button>
@@ -551,6 +553,8 @@
 <script src="plugins/usage/client.js"></script>
 <script src="plugins/redact/i18n.js"></script>
 <script src="plugins/redact/client.js"></script>
+<script src="plugins/recv/i18n.js"></script>
+<script src="plugins/recv/client.js"></script>
 <script src="plugins/otel/i18n.js"></script>
 <script src="purposes.js"></script>
 <script src="app.js"></script>
