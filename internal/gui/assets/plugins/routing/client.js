@@ -384,6 +384,18 @@ function routingPage(part) {
     return t("{n} d", { n: Math.round(m / 1440) });
   }
   const took = (ms = 0) => ms < 1000 ? t("{n} ms", { n: ms }) : t("{n} s", { n: (ms / 1000).toFixed(ms < 10e3 ? 1 : 0) });
+  // 接收进度（docs/subsystems/receive-monitor.md）：这条回复已经写到客户端
+  // 多少字节、这些内容大约值多少 tokens、最近一次内容有多久以前。只给还在飞
+  // 的请求用——结束的行有自己的一整排数字（时长、首字、tokens、缓存、速度），
+  // 说的比这里更多。
+  const liveSize = (n) => n >= 1048576 ? (n / 1048576).toFixed(1) + " MiB"
+    : n >= 1024 ? (n / 1024).toFixed(1) + " KiB" : Math.round(n || 0) + " B";
+  // 端点报的 tokens 是实数，估算的永远带 ≈。估不出来就不显示这格：上游还没定
+  // （按上游+模型查表无从查起）与样本不够，页面上都无需多话，等得出数再说。
+  const liveTokens = (r) => r.estTok ? t("≈ {n} tokens", { n: tokens(r.estTok) }) : "";
+  // 静默不是失败：这里只说"最近一次内容多久以前"，让数字自己说话。
+  const liveQuietMs = 15e3;
+  const liveSince = (r, now = Date.now()) => r.contentAt ? t("{d} ago", { d: dur(Math.max(0, now - r.contentAt)) }) : "";
   // (the formats made once: made for each call, they were much of what the
   // accounts' countdowns cost), made again when the GUI's language changes
   let fmtLang = null, HM, WD;
@@ -479,11 +491,18 @@ function routingPage(part) {
         t("Output tokens a second after the first, over the streamed replies") + ". " + t("A reply that reasoned counts only its answer, from its first text: the reasoning was written before the stream showed it") + ". " + t("No answer text: speed includes reasoning only when visible reasoning streamed; hidden reasoning has no speed")],
       cost: ["cost", "Cost", routeCost(r), [r.priced ? costNote() : routeCredits([r]) ? "" : t("No known price or token counts for this request"), routeCredits([r]) ? creditsNote() : ""].filter(Boolean).join("\n")],
     };
-    return visibleMetrics.map((key) => values[key]).filter((metric) => metric[2] !== "—");
+    const out = visibleMetrics.map((key) => values[key]).filter((metric) => metric[2] !== "—");
+    // 结束之后，"客户端到底收到多少字节"只剩这里有记录：流式途中的三格是临时的，
+    // 请求一结束就被 paintLive 摘掉。它不进 visibleMetrics 那套开关——传输量不是
+    // "要看哪个维度"的选择，而是这次请求发生过的事实。
+    if (r.done && r.bytes) out.push(["received", "Received", liveSize(r.bytes), t("How much of this reply has reached the client, framing included")]);
+    return out;
   }
   function metricElement([cls, label, value, help], compact = false) {
     const metric = el("span", "rt-metric " + (cls === "cost" ? "cost-metric" : cls));
-    if (!compact || cls === "ttft" || cls === "cache-hit") metric.append(el("span", "k", t(label)));
+    // "received" keeps its label in the compact row: a bare "58.5 KiB" next to
+    // "174 tok/s" would not say what it counted (only its own row knows).
+    if (!compact || cls === "ttft" || cls === "cache-hit" || cls === "received") metric.append(el("span", "k", t(label)));
     metric.append(el("span", "v" + (cls === "cost" ? " cost" : ""), value));
     if (compact && cls === "tokens") metric.append(el("span", "k", t("{n} tokens", { n: "" }).trim()));
     metric.title = help || t(label);
@@ -2696,8 +2715,25 @@ function routingPage(part) {
       else if (w.window) s = t("request longer than its {n} window · passed over", { n: ctxShort(w.window) });
       // a row another request weighed, answering that one: the header
       // tells of this request, so it says the answer is not this one's
-      else if (trying.has(id)) { s = (r.id !== cur.id && agents.size <= 1 ? t("answering another request…") : t("answering…")) + (said && " · " + said); named = titleOf(trying.get(id)); }
-      else if (answered.has(id)) { s = (agents.size > 1 ? t("answered {agent}", { agent: agentName(r.agent) }) : t("answered this request")) + (said && " · " + said); named = titleOf(r); }
+      else if (trying.has(id)) {
+        // 这条请求就写在"谁回答"这一格里：收到了多少、大约值多少 tokens、
+        // 最近一次内容多久以前。别的请求正用着这个账号时不写——那些数是别人的。
+        const live = r.id === cur.id ? liveParts(r).map(([value]) => value).join(" · ") : "";
+        // 安静下来就只说数，不说"正在回答"：它没失败，只是暂时没有新内容。
+        // 那句"正在回答"若留着，读的人会以为供应商还在往外写。
+        const hushed = live && r.contentAt && Date.now() - r.contentAt >= liveQuietMs;
+        s = hushed ? live
+          : (r.id !== cur.id && agents.size <= 1 ? t("answering another request…") : t("answering…")) + (said && " · " + said) + (live ? " · " + live : "");
+        named = titleOf(trying.get(id));
+      }
+      else if (answered.has(id)) {
+        // 结束之后这一格原本只剩"回答了这个请求"，谁也不知道这次传了多少。
+        // 补上传了的字节与端点报的输出 tokens（没有上报就只写字节），
+        // 不写"几秒前"——那说的是"多久没动静"，答完就没有意义了。
+        const ended = r.id === cur.id && r.bytes
+          ? [liveSize(r.bytes), r.out ? t("{n} tokens", { n: tokens(r.out) }) : ""].filter(Boolean).join(" · ")
+          : "";
+        s = ((agents.size > 1 ? t("answered {agent}", { agent: agentName(r.agent) }) : t("answered this request")) + (said && " · " + said)) + (ended ? " · " + ended : ""); named = titleOf(r); }
       else if (gave.has(id)) s = t("{status} · {fail} · passed to {agent}", { status: gave.get(id).status, fail: failWord(gave.get(id).fail), agent: agentName(r.agent) });
       else if (went.has(id)) s = t("{status} · {fail} · went on to the next", { status: went.get(id).status, fail: failWord(went.get(id).fail) });
       else if (w.noURL) s = noURLWord(w);
@@ -2758,6 +2794,10 @@ function routingPage(part) {
       const flying = !resting && (trying.has(id) || onWire.has(id));
       const on = flying || (!resting && answered.has(id));
       lightRow(row.li, row.wire, on, flying);
+      // 静默：这条回复还挂着，但上游已经很久没写字了。点转琥珀、不再脉动——
+      // 它没失败，只是安静（liveQuietMs 与网关的静默门槛同一个数）。
+      const quiet = flying && r.id === cur.id && !cur.done && cur.contentAt && Date.now() - cur.contentAt >= liveQuietMs;
+      row.li.classList.toggle("quiet", !!quiet);
       row.li.classList.toggle("low", !!(tiered(w) && w.known && group(w) !== "fine"));
       row.li.classList.toggle("rest", !!resting || gave.has(id));
       row.li.classList.toggle("left", !!w.unlisted || !!w.window);
@@ -3889,8 +3929,56 @@ function routingPage(part) {
       rowsMoved = true;
     }
     x.r = r;
+    // 行只在“说的话”变了时重建（上面那条 #3731 的道理），字节数与最近内容时间
+    // 不在 sig 里，所以这里就地改那几格的数字：整行不动，不闪也不带跑滚动位置，
+    // 但数字仍然每半秒往前走。
+    paintLive(x.b, r);
     if (x.b.getAttribute("aria-pressed") !== sel) x.b.setAttribute("aria-pressed", sel);
     return x.b;
+  }
+  // liveParts: 一条还在飞的请求要说的那几个数（值、说明）。行上的三格与
+  // 「谁回答」那一格的旁注都从这里取——哪几个数、什么时候出现，只在这里决定
+  // 一次：估不出 tokens 就不说（见 liveTokens），没有内容时间就不说"多久前"。
+  function liveParts(r, now = Date.now()) {
+    if (r.done || !r.bytes) return [];
+    const parts = [[liveSize(r.bytes), t("How much of this reply has reached the client, framing included")]];
+    if (r.estTok) parts.push([liveTokens(r), t("What the words written so far are worth in output tokens, learned per provider and model")]);
+    if (r.contentAt) parts.push([liveSince(r, now), t("How long ago the model last wrote something. A quiet reply is not a failed one")]);
+    return parts;
+  }
+  // liveCells: 那些数在行右侧的三格。值自己带单位（B、token、秒前），所以这三格
+  // 不写标签，说明挂成悬停提示。三格共用 .recv 这一个类：它们只被 paintLive 按
+  // 个数与顺序认回来，不参与 visibleMetrics 那套"要看哪个维度"的开关——传输量
+  // 是发生过的事实。
+  function liveCells(r, now = Date.now()) {
+    return liveParts(r, now).map(([value, help]) => ["recv", "", value, help]);
+  }
+  // paintLive: A 那三格就地更新。格数不对（行是新的，或请求刚结束该收起来）
+  // 就整组补/删，否则只换数字。
+  function paintLive(button, r) {
+    const meta = button.querySelector(".meta");
+    if (!meta) return;
+    const cells = liveCells(r);
+    const had = [...meta.querySelectorAll(".rt-metric.recv")];
+    if (had.length !== cells.length) {
+      had.forEach((c) => c.remove());
+      cells.forEach((c) => meta.append(metricElement(c, true)));
+      meta.hidden = !meta.children.length;
+      return;
+    }
+    cells.forEach(([cls, label, value, help], i) => {
+      const cell = had[i];
+      const v = cell.querySelector(".v");
+      if (v && v.textContent !== value) v.textContent = value;
+      if (cell.title !== help) cell.title = help;
+    });
+  }
+  // 静默期网关没有字节可写，liveBytes 也就不叫醒 trace 的长轮询，页面收不到
+  // 响应，行上的「多久以前」会冻在最后一次写入的数上。秒级心跳把还在飞的行
+  // 就地重画一遍：「多久以前」一秒一秒往前走，静默才看得出来。paintLive 幂等、
+  // 只碰那三格，空转可以忽略；结束的行不碰，它们的格子本来就该收掉。
+  function livePaint() {
+    for (const x of reqRows.values()) if (x.r && !x.r.done && x.r.bytes) paintLive(x.b, x.r);
   }
   // A day of history is up to 2,000 requests, and a row is ~20 elements:
   // all of them in the list, a day picked took the page 0.4–0.7s here and
@@ -4159,7 +4247,12 @@ function routingPage(part) {
     const info = el("span", "meta");
     if (meta.length) info.append(el("span", "retry-count", meta.join(" · ")));
     info.append(...metrics.map((m) => metricElement(m, true)));
-    info.hidden = !metrics.length && !meta.length;
+    // 还在飞的请求：进度就写在这一行右侧——那里本来空着（结束的行才有一整排
+    // 数字）。这三个数每秒变一次，但不进这一行的 key：key 变了行会重建，
+    // 滚动位置和展开状态就跟着跳了。
+    const live = liveCells(r);
+    for (const cell of live) info.append(metricElement(cell, true));
+    info.hidden = !metrics.length && !meta.length && !live.length;
     b.append(when, asked, to, info);
 
     b.title = title;
@@ -5014,7 +5107,7 @@ function routingPage(part) {
   let second = 0;
   function countdown() {
     if (!shown()) { clearInterval(second); second = 0; return; }
-    second ||= setInterval(() => { if (!shown()) return countdown(); if (!pinned && loaded && cur) sync(); render(); renderActs(listed()); groupsReadAgain(); }, 1000);
+    second ||= setInterval(() => { if (!shown()) return countdown(); if (!pinned && loaded && cur) sync(); render(); renderActs(listed()); groupsReadAgain(); livePaint(); }, 1000);
   }
   countdown();
 

@@ -55,9 +55,15 @@ type captureResponseWriter struct {
 	whole *spool
 	// tools: whether the reply calls a tool, for a turn's end (turns)
 	tools *toolScan
+	// live: 接收监控的那一行（live.go），nil 表示不是客户端这一层
+	live *liveRow
 }
 
 func (w *captureResponseWriter) Write(p []byte) (int, error) {
+	// 每个写给客户端的字节都从这里过：只计数，不缓存、不改内容。
+	// 只有 SSE 注释（网关自己的心跳）不刷新"最近内容"；内容字节按
+	// Content-Type 认出来的协议逐事件数，用来估算 tokens。
+	w.live.observe(p, w.Header().Get("Content-Type"))
 	w.body.add(p)
 	w.tools.add(p)
 	if w.full != nil {

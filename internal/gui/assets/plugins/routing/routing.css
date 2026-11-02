@@ -142,6 +142,11 @@
 @keyframes rtlive { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--fg) 40%, transparent); } 70%, 100% { box-shadow: 0 0 0 6px transparent; } }
 .rt-accts li.low em { color: var(--fg-2); }
 .rt-accts li.rest { border-style: dashed; }
+/* 静默：这条回复还挂着，但上游已经 15 秒没写内容了。琥珀点、不再脉动——
+   它没失败，只是安静（数值与网关的静默门槛同一个，见
+   docs/subsystems/receive-monitor.md）。 */
+.rt-accts li.quiet .dot { background: var(--amber); border-color: var(--amber); animation: none; }
+.rt-accts li.quiet em { color: var(--amber); }
 .rt-accts li.rest > :not(.tag) { opacity: .5; }
 .rt-accts li.rest em { color: var(--red); opacity: .85; }
 .rt-accts li.left { border-style: dotted; }
