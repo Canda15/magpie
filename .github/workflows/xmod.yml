@@ -1,0 +1,147 @@
+name: xmod release
+
+# Upstream pushes a tag every few minutes, so building every tag would be
+# hundreds of releases a day. The six-hour schedule is the throttle: each run
+# takes whatever is newest at that moment, puts our commits on top and
+# publishes it as xmod-vX with the Windows executable. (One tag in ten also
+# ends in 0, and an earlier version of this file waited for those; with the
+# schedule already limiting the rate that only made it older and no rarer.)
+#
+# The release tag does not start with v on purpose: release.yml runs on v*
+# and hands off to yetone/magpie-releases, where our signing keys do not
+# exist, so a v* tag here would only start a run that fails.
+#
+# main is an upstream commit plus our commits (the feature and this file).
+# Each of ours is cherry-picked onto the chosen tag, and a conflict fails the
+# run: a release built from half-applied code is worse than no release.
+#
+# These builds update themselves from nobody: the feed is usemagpie.ai's and
+# holds upstream's releases only, so a binary that looks like a release would
+# be offered upstream's next one and swap our monitor out. Its version is
+# therefore a describe string with xmod after it.
+
+on:
+  schedule:
+    - cron: '17 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Upstream tag to build (empty: the newest one)'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: xmod-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Pick the upstream tag
+        id: pick
+        env:
+          WANT: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          if [ -n "${WANT}" ]; then
+            TAG="${WANT}"
+          else
+            TAG=$(git ls-remote --tags --refs https://github.com/yetone/magpie.git 'v0.1.*' \
+              | awk '{print $2}' | sed 's|refs/tags/||' \
+              | grep -E '^v0\.1\.[0-9]+$' | sort -V | tail -n 1)
+          fi
+          test -n "${TAG}" || { echo '::error::no upstream tag matched'; exit 1; }
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          if git ls-remote --tags --refs origin "xmod-${TAG}" | grep -q .; then
+            echo "xmod-${TAG} is already out; nothing to do"
+            echo 'skip=yes' >> "$GITHUB_OUTPUT"
+          else
+            echo 'skip=no' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Put our commits on that tag
+        if: steps.pick.outputs.skip == 'no'
+        env:
+          TAG: ${{ steps.pick.outputs.tag }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags https://github.com/yetone/magpie.git "+refs/tags/${TAG}:refs/tags/${TAG}"
+          # Everything in main the tag does not have is ours, in order: the
+          # feature and this workflow. Each one is picked over by itself so a
+          # failure names the commit that stopped applying.
+          OUR=$(git rev-list --reverse "${TAG}..HEAD")
+          test -n "${OUR}" || { echo "::error::main has no commits of ours over ${TAG}"; exit 1; }
+          git checkout -B xmod-build "${TAG}"
+          for c in ${OUR}; do
+            git -c user.name=xmod -c user.email=xmod@users.noreply.github.com \
+              cherry-pick "$c" || {
+                echo "::error::${c} no longer applies to ${TAG}; it needs a hand rebase"
+                exit 1
+              }
+          done
+
+      - name: Check before publishing
+        if: steps.pick.outputs.skip == 'no'
+        run: |
+          set -euo pipefail
+          test -z "$(gofmt -l internal/gateway internal/gui plugins)"
+          go vet -tags nogui ./internal/gateway ./internal/gui ./internal/cli ./plugins/...
+          # The live feature's own tests, named one by one: a bare "TestLive"
+          # also picks up upstream's unrelated tests (TestLiveListsEndpointsRoute,
+          # TestLivePromptHasItsWindow, TestLiveVisibleReasoningFixture and
+          # TestLiveCodexSealedAgentGuidance), and the first of those flakes here
+          # when it shares the run with the rest of the package.
+          go test -tags nogui ./internal/gateway -run '^(TestLiveCountsBytesAndContent|TestLiveHeartbeatIsBytesNotContent|TestLiveIsOptional|TestLiveWritesReachTheRoute|TestLiveCountsARealStream|TestCommentOnlyTellsHeartbeatsApart|TestContentBytesPerProtocol|TestContentCounter[A-Za-z]*|TestRates[A-Za-z]*|TestRouteGetsTheEstimateOnlyOnceItIsCalibrated)$'
+          go test -tags nogui ./internal/gui -run 'TestBuiltin|TestCoreBudget|TestTranslated'
+          # TestEveryRoute is upstream's bookkeeping over every /api route, and
+          # upstream ships tags that fail it on their own: v0.1.2840 registers
+          # GET /api/context/reply without an entry, and so does their main. Run
+          # here, it would fail our build for their gap. Our patch adds no route
+          # of its own, so what is checked instead is that the patch itself came
+          # through: the two names the feature is built from.
+          grep -q 'liveBegin' internal/gateway/gateway.go
+          grep -q 'liveCells' internal/gui/assets/plugins/routing/client.js
+
+      - name: Build the Windows executables
+        if: steps.pick.outputs.skip == 'no'
+        env:
+          TAG: ${{ steps.pick.outputs.tag }}
+        run: |
+          set -euo pipefail
+          # The version is what git describe would say about a build that is
+          # not a tag, with xmod after it: v0.1.2800-2-g116d762-xmod. The part
+          # before xmod is what keeps update.Released from reading it as a
+          # release: it would compare v0.1.2800-xmod with usemagpie.ai's feed,
+          # find v0.1.2805 newer and offer to install the official build,
+          # which has no receive monitor in it.
+          COUNT=$(git rev-list --count "${TAG}..HEAD")
+          SHA=$(git rev-parse --short HEAD)
+          # Upstream's target builds windows/amd64 and windows/arm64 both; the amd64
+          # one is the only one published. Its recipe is left as it is on
+          # purpose: a patch to the Makefile (a knob naming the arches, once)
+          # stalled a run as soon as upstream edited the lines beside it.
+          make release-windows VERSION="${TAG}-${COUNT}-g${SHA}-xmod"
+
+      - name: Publish
+        if: steps.pick.outputs.skip == 'no'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.pick.outputs.tag }}
+        run: |
+          set -euo pipefail
+          gh release create "xmod-${TAG}" \
+            dist/magpie-windows-amd64.exe \
+            --title "${TAG}-xmod" \
+            --notes "upstream ${TAG} with our receive monitor on top, built from $(git rev-parse --short HEAD), windows/amd64 only."
