@@ -25,19 +25,23 @@ type Note struct {
 	Pending bool `json:"pending,omitempty"`
 }
 
-// NotesFeed is where the notes of past releases are listed: beside the
-// update feed, on magpie's site. MAGPIE_NOTES_FEED points it elsewhere.
+// NotesFeed is where the notes of past releases are listed: upstream's site,
+// beside the feed published there. The fork runs no notes service of its own,
+// and the releases after the one an xmod build sits on are upstream's, so
+// what's-new keeps reading them from upstream. MAGPIE_NOTES_FEED points it
+// elsewhere.
 func NotesFeed() string {
 	if f := os.Getenv("MAGPIE_NOTES_FEED"); f != "" {
 		return f
 	}
-	return Site + "/api/notes"
+	return upstream + "/api/notes"
 }
 
 // ReleasePage is version's page on GitHub, where its notes are when the
-// site can't give them (#661).
+// site can't give them (#661). The fork tags its releases xmod-v<version>, so
+// the page it links to is the fork's, not upstream's.
 func ReleasePage(version string) string {
-	return "https://github.com/yetone/magpie-releases/releases/tag/v" + strings.TrimPrefix(strings.TrimSpace(version), "v")
+	return Site + "/tag/xmod-v" + strings.TrimPrefix(strings.TrimSpace(version), "v")
 }
 
 // NotesBetween asks the site for the notes of every release after after
