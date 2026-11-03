@@ -2,6 +2,11 @@
 // releases of yetone/magpie-releases; usemagpie.ai/api/latest describes the
 // newest one: its version, notes, and every file with its SHA-256.
 //
+// The xmod fork of magpie publishes a feed of its own instead (latest.json on
+// its own releases): an xmod build must update itself, and following
+// upstream's feed would install the official app over it — which carries no
+// receive monitor.
+//
 // The macOS app replaces its own bundle: the new zip is downloaded, checked
 // against its hash, unpacked, and accepted only if it is signed by the same
 // team as the app already installed. A bare binary (the terminal build,
@@ -40,11 +45,22 @@ import (
 	"github.com/yetone/magpie/internal/source"
 )
 
-// Site is magpie's home; its /api/latest is the update feed.
-const Site = "https://usemagpie.ai"
+// Site is where a new version of this build comes from: the fork's own
+// releases, never upstream's. The receive monitor exists only in the fork, so
+// an xmod build that followed usemagpie.ai would replace itself with the
+// official app and lose it; every link that sends someone to download magpie
+// points here for that reason.
+const Site = "https://github.com/Canda15/magpie/releases"
 
-// Feed is where the newest release is described. MAGPIE_UPDATE_FEED points
-// it elsewhere, for testing an update against a local server.
+// upstream is magpie's own site, which still answers for release notes: the
+// fork writes none of its own, and the versions after the one an xmod build
+// sits on are upstream's releases anyway.
+const upstream = "https://usemagpie.ai"
+
+// Feed is where the newest release is described: latest.json, an asset of the
+// newest release, so the description and the file it points at are published
+// in one go and cannot disagree. MAGPIE_UPDATE_FEED points it elsewhere, for
+// testing an update against a local server.
 func Feed() string {
 	if f := os.Getenv("MAGPIE_UPDATE_FEED"); f != "" {
 		return f

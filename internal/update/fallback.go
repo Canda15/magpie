@@ -29,16 +29,25 @@ import (
 // The Stable channel is the site's choice (a release a week), which
 // GitHub can't give: on Stable a failed feed stays a failed feed.
 
-// releaseRepo is where releases are published.
-const releaseRepo = "yetone/magpie-releases"
+// releaseRepo is where releases are published: the fork's own repository, the
+// one whose newest release carries the feed this build reads. It is never
+// upstream's — a build that read yetone/magpie-releases here would be offered
+// the official app, which carries no receive monitor, and would install it
+// over itself.
+const releaseRepo = "Canda15/magpie"
 
 // feedWait is how long the feed has to answer when GitHub stands behind
 // it: a network that drops usemagpie.ai's packets would otherwise hold
 // the check for the client's ten minutes. A var for tests.
 var feedWait = 20 * time.Second
 
-// siteFeed is the default feed; a var for tests.
-var siteFeed = Site + "/api/latest"
+// siteFeed is the feed the app reads by default — latest.json, an asset of the
+// newest release — and a var for tests. It is the fork's, not usemagpie.ai's:
+// the receive monitor exists only in the fork, so a build that followed
+// upstream's feed would replace itself with the official app. The GitHub route
+// below reads the repository that publishes this feed, so GitHub and the feed
+// are one route here; neither can reach past this build's own releases.
+var siteFeed = Site + "/latest/download/latest.json"
 
 // maxSmall bounds SHA256SUMS and its signature.
 const maxSmall = 1 << 20

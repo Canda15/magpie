@@ -46,6 +46,28 @@ func TestReleased(t *testing.T) {
 	}
 }
 
+// The fork publishes 0.1.2860+xmod.<sha> builds and names 0.1.2860 in the feed
+// beside them. That build has to count as a release, or nothing ever offers an
+// update, and has to compare equal to the entry describing it, or every check
+// offers the build already running.
+func TestXmodBuildsUpdateFromTheForkFeed(t *testing.T) {
+	const running = "0.1.2860+xmod.c79e1fc03"
+	if !Released(running) {
+		t.Errorf("Released(%q) = false: an xmod build would never update", running)
+	}
+	if Newer("0.1.2860", running) {
+		t.Errorf("0.1.2860 is newer than %q, the entry that describes it", running)
+	}
+	if !Newer("0.1.2861", running) {
+		t.Errorf("the next checkpoint is not newer than %q", running)
+	}
+	// A describe string is what an upstream-style build looks like; the fork's
+	// feed would never update it, which is what keeps the two apart.
+	if Released("0.1.2860-2-gc79e1fc03-xmod") {
+		t.Error("a describe string counts as a release")
+	}
+}
+
 func TestHomebrew(t *testing.T) {
 	for exe, want := range map[string]bool{
 		"/opt/homebrew/Cellar/magpie/0.1.126/bin/magpie":              true,
