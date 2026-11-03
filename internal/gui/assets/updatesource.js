@@ -1,10 +1,17 @@
 // Settings › Network's Update source (RootSir and Sakugar_ on X): where an
 // update is read and downloaded from, one menu button as the language's is.
 // app.js imports this when the page is drawn, so it weighs nothing on the
-// core. "" is automatic; site never goes to GitHub, github never to
-// usemagpie.ai.
+// core. "" is automatic; site never goes to GitHub.
+//
+// The fork offers no "GitHub only": its feed is an asset of its own GitHub
+// release, so GitHub and the feed are one route here, and the list GitHub's
+// SHA256SUMS describes is upstream's — the official app, which carries no
+// receive monitor. Offering the choice would either replace this build with
+// that one, or, since the fork publishes no signed list, fail every check.
+// A setting left at it by an official build reads as automatic and is
+// written back as one.
 window.updateSourcePick = function updateSourcePick(s, keep) {
-  const names = { "": "Automatic", site: "usemagpie.ai only", github: "GitHub only" };
+  const names = { "": "Automatic", site: "usemagpie.ai only" };
   const b = $("#updateSourcePick");
   const chosen = s.updateSource in names ? s.updateSource : "";
   b.dataset.value = chosen;

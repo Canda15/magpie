@@ -15,10 +15,14 @@ name: xmod release
 # Each of ours is cherry-picked onto the chosen tag, and a conflict fails the
 # run: a release built from half-applied code is worse than no release.
 #
-# These builds update themselves from nobody: the feed is usemagpie.ai's and
-# holds upstream's releases only, so a binary that looks like a release would
-# be offered upstream's next one and swap our monitor out. Its version is
-# therefore a describe string with xmod after it.
+# These builds update themselves, from a feed this file publishes: latest.json
+# rides along with every release and is what update.Feed asks for. The feed is
+# the fork's, never usemagpie.ai's — that one lists upstream's releases, and
+# taking one would swap our monitor out for the official app. The version is a
+# plain release number, 0.1.2854+xmod.06ed67cd9: build metadata after "+" takes
+# no part in the comparison, so update.Released reads it as a release and
+# update.Newer sees exactly 0.1.2854 — the version latest.json names, so a
+# build is never newer than itself, and older than the next checkpoint.
 
 on:
   schedule:
@@ -120,19 +124,52 @@ jobs:
           TAG: ${{ steps.pick.outputs.tag }}
         run: |
           set -euo pipefail
-          # The version is what git describe would say about a build that is
-          # not a tag, with xmod after it: v0.1.2800-2-g116d762-xmod. The part
-          # before xmod is what keeps update.Released from reading it as a
-          # release: it would compare v0.1.2800-xmod with usemagpie.ai's feed,
-          # find v0.1.2805 newer and offer to install the official build,
-          # which has no receive monitor in it.
-          COUNT=$(git rev-list --count "${TAG}..HEAD")
+          # The version the updater compares: 0.1.2854+xmod.06ed67cd9. What
+          # follows "+" is build metadata to update.parse and takes no part in
+          # the order, so this is 0.1.2854 — equal to what latest.json says
+          # about this very release, so nobody is offered the build they already
+          # run, and smaller than the next checkpoint, so that one is offered.
+          # Rebuilding the same tag with more of our commits keeps this number:
+          # such a build is not handed out, the next upstream tag (hours away)
+          # carries the change.
+          BASE="${TAG#v}"
           SHA=$(git rev-parse --short HEAD)
-          # Upstream's target builds windows/amd64 and windows/arm64 both; the amd64
-          # one is the only one published. Its recipe is left as it is on
+          # Upstream's target builds windows/amd64 and windows/arm64 both; the
+          # amd64 one is the only one published. Its recipe is left as it is on
           # purpose: a patch to the Makefile (a knob naming the arches, once)
           # stalled a run as soon as upstream edited the lines beside it.
-          make release-windows VERSION="${TAG}-${COUNT}-g${SHA}-xmod"
+          make release-windows VERSION="${BASE}+xmod.${SHA}"
+          echo "built ${BASE}+xmod.${SHA}"
+
+      - name: Write the update feed
+        if: steps.pick.outputs.skip == 'no'
+        env:
+          TAG: ${{ steps.pick.outputs.tag }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          BASE="${TAG#v}"
+          FILE=dist/magpie-windows-amd64.exe
+          SIZE=$(stat -c %s "${FILE}")
+          SHA256=$(sha256sum "${FILE}" | cut -d' ' -f1)
+          # The feed the app reads: the version it compares against its own, the
+          # notes it shows, and the file with the SHA-256 it checks before
+          # installing — update.download turns down a release that lists none.
+          cat > dist/latest.json <<JSON
+          {
+            "version": "${BASE}",
+            "notes": "upstream ${TAG} with our receive monitor on top, built from $(git rev-parse --short HEAD). windows/amd64 only.",
+            "url": "https://github.com/${REPO}/releases/tag/xmod-${TAG}",
+            "assets": {
+              "magpie-windows-amd64.exe": {
+                "url": "https://github.com/${REPO}/releases/download/xmod-${TAG}/magpie-windows-amd64.exe",
+                "size": ${SIZE},
+                "sha256": "${SHA256}"
+              }
+            }
+          }
+          JSON
+          cat dist/latest.json
 
       - name: Publish
         if: steps.pick.outputs.skip == 'no'
@@ -141,7 +178,12 @@ jobs:
           TAG: ${{ steps.pick.outputs.tag }}
         run: |
           set -euo pipefail
+          # --latest: the feed is releases/latest/download/latest.json, so this
+          # release has to be the one that mark points at even if a delayed run
+          # for an older tag publishes afterwards.
           gh release create "xmod-${TAG}" \
             dist/magpie-windows-amd64.exe \
+            dist/latest.json \
             --title "${TAG}-xmod" \
+            --latest \
             --notes "upstream ${TAG} with our receive monitor on top, built from $(git rev-parse --short HEAD), windows/amd64 only."
