@@ -548,11 +548,18 @@ function routingPage(part) {
         t("Output tokens a second after the first, over the streamed replies") + ". " + t("A reply that reasoned counts only its answer, from its first text: the reasoning was written before the stream showed it") + ". " + t("No answer text: speed includes reasoning only when visible reasoning streamed; hidden reasoning has no speed")],
       cost: ["cost", "Cost", routeCost(r), [r.priced ? costNote() : routeCredits([r]) ? "" : t("No known price or token counts for this request"), routeCredits([r]) ? creditsNote() : ""].filter(Boolean).join("\n")],
     };
-    return visibleMetrics.map((key) => values[key]).filter((metric) => metric[2] !== "—");
+    const out = visibleMetrics.map((key) => values[key]).filter((metric) => metric[2] !== "—");
+    // 结束之后「客户端到底收到多少字节」只剩这里有记录：流式途中那三格是临时的，
+    // 请求一结束就被 paintLive 摘掉。它不进 visibleMetrics 那套开关——传输量不是
+    // 「要看哪个维度」的选择，而是这次请求发生过的事实。
+    if (r.done && r.bytes) out.push(["received", "Received", liveSize(r.bytes), t("How much of this reply has reached the client, framing included")]);
+    return out;
   }
   function metricElement([cls, label, value, help], compact = false) {
     const metric = el("span", "rt-metric " + (cls === "cost" ? "cost-metric" : cls));
-    if (!compact || cls === "ttft" || cls === "cache-hit") metric.append(el("span", "k", t(label)));
+    // "received" 在这一行里保留标签：旁边是 "0 tok/s" 这类没有单位的数，
+    // 光一个 "274 B" 说不清它数的是什么。
+    if (!compact || cls === "ttft" || cls === "cache-hit" || cls === "received") metric.append(el("span", "k", t(label)));
     metric.append(el("span", "v" + (cls === "cost" ? " cost" : ""), value));
     if (compact && cls === "tokens") metric.append(el("span", "k", t("{n} tokens", { n: "" }).trim()));
     metric.title = help || t(label);
@@ -2808,7 +2815,16 @@ function routingPage(part) {
           : (r.id !== cur.id && agents.size <= 1 ? t("answering another request…") : t("answering…")) + (said && " · " + said) + (live ? " · " + live : "");
         named = titleOf(trying.get(id));
       }
-      else if (answered.has(id)) { s = (agents.size > 1 ? t("answered {agent}", { agent: agentName(r.agent) }) : t("answered this request")) + (said && " · " + said); named = titleOf(r); }
+      else if (answered.has(id)) {
+        // 答完之后这一格原本只剩「回答了这个请求」，谁也不知道这次传了多少。
+        // 补上传了的字节与端点报的输出 tokens（端点没报就只写字节），不写
+        // 「几秒前」——那说的是「多久没动静」，答完就没有意义了。
+        const ended = r.id === cur.id && r.bytes
+          ? [liveSize(r.bytes), r.out ? t("{n} tokens", { n: tokens(r.out) }) : ""].filter(Boolean).join(" · ")
+          : "";
+        s = ((agents.size > 1 ? t("answered {agent}", { agent: agentName(r.agent) }) : t("answered this request")) + (said && " · " + said)) + (ended ? " · " + ended : "");
+        named = titleOf(r);
+      }
       else if (gave.has(id)) s = t("{status} · {fail} · passed to {agent}", { status: gave.get(id).status, fail: failWord(gave.get(id).fail, gave.get(id).rest), agent: agentName(r.agent) });
       else if (went.has(id)) s = t("{status} · {fail} · went on to the next", { status: went.get(id).status, fail: failWord(went.get(id).fail, went.get(id).rest) });
       else if (w.noURL) s = noURLWord(w);

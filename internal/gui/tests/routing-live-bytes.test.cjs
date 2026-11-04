@@ -52,7 +52,7 @@ function serve(lang, live) {
 for (const engine of (process.env.BROWSER ? [process.env.BROWSER] : ["chromium", "webkit"])) {
   for (const lang of ["en", "zh", "zh-TW", "ja", "de"]) {
     for (const width of [1100, 420]) {
-      test(`${engine} ${lang} ${width}px: a reply in flight shows what has arrived, and nothing once it is done`, async (t) => {
+      test(`${engine} ${lang} ${width}px: a reply in flight shows what has arrived, and how much it carried once done`, async (t) => {
         const browser = await (engine === "webkit" ? webkit.launch() : chromium.launch({ channel: "chromium" }));
         t.after(() => browser.close());
         const page = await browser.newPage({ viewport: { width, height: 900 } });
@@ -114,12 +114,15 @@ for (const engine of (process.env.BROWSER ? [process.env.BROWSER] : ["chromium",
         const before = (await cells())[2];
         await page.waitForFunction((b) => document.querySelectorAll(".rt-req .rt-metric.recv")[2]?.textContent.trim() !== b, before, { timeout: 4000 });
 
-        // done: no live cells, nothing quiet, the account answered it
+        // done: no live cells, nothing quiet; the row says how much this reply
+        // carried and the account that answered says the same
         send(route({ bytes: 3 * 1048576 + 700000 }, true));
         await page.waitForFunction(() => !document.querySelector(".rt-metric.recv"));
         assert.equal(await page.locator(".rt-accts li.quiet").count(), 0);
+        assert.equal(await page.locator(".rt-req .rt-metric.received .v").first().textContent(), "3.7 MiB");
+        const said = await say("{n} tokens", { n: "900" });
         em = (await account.locator("em").textContent()).trim();
-        assert.ok(!/MiB/.test(em), em);
+        assert.ok(em.includes("3.7 MiB") && em.includes(said), em);
         assert.deepEqual(errors, []);
       });
     }
