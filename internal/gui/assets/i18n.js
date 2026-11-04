@@ -5077,6 +5077,7 @@ const I18N = {
     "≈ {n} tokens": "≈ {n} token",
     "{d} ago": "{d}前",
     "How much of this reply has reached the client, framing included": "这条回复已经送到客户端的字节数，含流式封装",
+    "Received": "已接收",
     "What the words written so far are worth in output tokens, learned per provider and model": "已经写出的这些字值多少输出 tokens，按上游与模型学来的比例估算",
     "How long ago the model last wrote something. A quiet reply is not a failed one": "模型最近一次写出内容是多久以前。安静不代表失败",
     // Insights › Masking (plugins/redact), words said elsewhere too
@@ -10156,6 +10157,7 @@ const I18N = {
     "≈ {n} tokens": "≈ {n} token",
     "{d} ago": "{d}前",
     "How much of this reply has reached the client, framing included": "這條回覆已經送到客戶端的位元組數，含串流封裝",
+    "Received": "已接收",
     "What the words written so far are worth in output tokens, learned per provider and model": "已經寫出的這些字值多少輸出 tokens，按上游與模型學來的比例估算",
     "How long ago the model last wrote something. A quiet reply is not a failed one": "模型最近一次寫出內容是多久以前。安靜不代表失敗",
     // Insights › Masking (plugins/redact), words said elsewhere too
@@ -15237,6 +15239,7 @@ const I18N = {
     "≈ {n} tokens": "≈ {n} tokens",
     "{d} ago": "{d}前",
     "How much of this reply has reached the client, framing included": "この返信がクライアントに届いたバイト数（ストリームの枠を含む）",
+    "Received": "受信済み",
     "What the words written so far are worth in output tokens, learned per provider and model": "ここまでに書かれた語が出力 tokens で何個ぶんか。上流とモデルごとに学んだ比率で推定",
     "How long ago the model last wrote something. A quiet reply is not a failed one": "モデルが最後に内容を書いたのはいつか。静かなのは失敗ではない",
     // Insights › Masking (plugins/redact), words said elsewhere too
@@ -20318,6 +20321,7 @@ const I18N = {
     "≈ {n} tokens": "≈ {n} tokens",
     "{d} ago": "vor {d}",
     "How much of this reply has reached the client, framing included": "Wie viele Bytes dieser Antwort schon beim Client angekommen sind, samt Stream-Rahmen",
+    "Received": "Empfangen",
     "What the words written so far are worth in output tokens, learned per provider and model": "Was die bisher geschriebenen Wörter in Ausgabe-tokens wert sind, geschätzt aus dem je Anbieter und Modell gelernten Verhältnis",
     "How long ago the model last wrote something. A quiet reply is not a failed one": "Wie lange es her ist, dass das Modell zuletzt etwas geschrieben hat. Still heißt nicht gescheitert",
     // Insights › Masking (plugins/redact), words said elsewhere too
