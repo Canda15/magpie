@@ -82,7 +82,6 @@ func TestTamperedReleaseRefused(t *testing.T) {
 		},
 		"signature garbage": func(r *Release) { r.Signed.Sig = "zz" },
 		"other version":     func(r *Release) { r.Version = "0.1.4001" },
-		"signature dropped": func(r *Release) { r.Signed = nil },
 	}
 	for name, tamper := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -105,9 +104,11 @@ func TestSignedByOtherKeyRefused(t *testing.T) {
 	}
 }
 
-// Before the first signed release, no signature is asked for; a bad one
-// there is still refused.
-func TestUnsignedEraNeedsNoSignature(t *testing.T) {
+// The fork turns the signature requirement off (signedRequired), because its
+// CI cannot hold the upstream key: an unsigned release — every xmod build —
+// is accepted with the feed's own SHA-256, while a release that does carry a
+// signature not made by the embedded key is still refused.
+func TestUnsignedReleaseAccepted(t *testing.T) {
 	t.Setenv("MAGPIE_UPDATE_FEED", "")
 	old := &Release{Version: "0.1.3000", Assets: map[string]Asset{"a": {SHA256: "ab"}}}
 	if err := old.verify(); err != nil {
@@ -116,12 +117,15 @@ func TestUnsignedEraNeedsNoSignature(t *testing.T) {
 	if old.Assets["a"].SHA256 != "ab" {
 		t.Fatal("hash changed")
 	}
-	first := &Release{Version: firstSigned}
-	if first.verify() == nil {
-		t.Fatal("the first signed release passed unsigned")
+	// 0.1.4757 是 xmod feed 真实的版本号，无 signed 块，必须放行。
+	cur := &Release{Version: "0.1.4757", Assets: map[string]Asset{"a": {SHA256: "ab"}}}
+	if err := cur.verify(); err != nil {
+		t.Fatalf("an unsigned fork release was refused: %v", err)
 	}
-	if (&Release{Version: "0.2.0"}).verify() == nil {
-		t.Fatal("a later release passed unsigned")
+	bad := signedRelease(t, "0.1.4757", map[string]string{"a": "1"})
+	bad.Signed.Sig = base64.StdEncoding.EncodeToString(make([]byte, 64))
+	if bad.verify() == nil {
+		t.Fatal("a signature not made by the embedded key was accepted")
 	}
 }
 

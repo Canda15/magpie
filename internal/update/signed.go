@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 )
 
@@ -20,18 +19,16 @@ import (
 // against signingKey, below, which is built into the binary. A file's hash is
 // then the one the signed list gives, and a feed hash that differs is refused.
 //
-// Versions from firstSigned on must carry a valid signature. A build that
-// holds the key is a release from firstSigned on and only moves to a newer
-// one, so every update it takes is of the signed era; the older releases
-// (and the first update into the signed era, taken by a binary that has no
-// key yet) are checked by SHA-256 from the feed as before.
+// Upstream requires a signature from 0.1.3862 on, and a build that holds
+// its key is a release from then on and only moves to a newer one. The fork
+// turns that requirement off (see signedRequired): the key lives only in
+// yetone/magpie-releases, which a fork cannot sign with, so every fork build
+// at or after 0.1.3862 would otherwise be refused forever. A release that
+// does carry a signature is still checked.
 
 // signingKey is the public half (base64, raw 32 bytes) of the release
 // signing key. A var for tests.
 var signingKey = "3XuYQEohIRDF+zxGQry1iXGZ1cfKYFX3vsST6GSSbYQ="
-
-// firstSigned is the first release published with a SHA256SUMS.sig.
-const firstSigned = "0.1.3862"
 
 // Signed is a release's SHA256SUMS as published and its ed25519 signature
 // (base64).
@@ -41,15 +38,15 @@ type Signed struct {
 }
 
 // signedRequired reports whether version must carry a valid signature.
-// MAGPIE_UPDATE_FEED, which points updates at a server of one's own for
-// testing, lifts the requirement (that server can't sign with our key); a
-// signature it does give is still checked.
-func signedRequired(version string) bool {
-	if os.Getenv("MAGPIE_UPDATE_FEED") != "" {
-		return false
-	}
-	return !Newer(firstSigned, version)
-}
+//
+// 本 fork 关闭这道要求：发布签名用的私钥只存在于上游 yetone/magpie-releases，
+// 我们的 xmod 工作流拿不到它，因此任何与上游同版本号(>= 0.1.3862)的 fork
+// 构建都永远过不了签名校验，也就永远收不到更新（本机 0.1.4037+xmod.* 卡在
+// 0.1.3862 之后即是此因）。fork 的 feed 由自己仓库的 HTTPS 发布，latest.json
+// 里给出每个文件的 SHA-256，下载时仍按该哈希校验字节；若某条 release 恰好带了
+// 签名，verify 依旧会验证它，只是不再强制。attestation（attest.go）只在签名
+// 存在时才会置 a.attest，故这里放开后它也随之不再生效。
+func signedRequired(string) bool { return false }
 
 // verify checks rel against the embedded key and, when it is signed, sets
 // each asset's SHA256 to the signed list's and drops the files that list
